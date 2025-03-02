@@ -6,15 +6,7 @@ import os
 import pickle
 from pydub import AudioSegment
 from pydub.utils import which
-from sklearn.model_selection import train_test_split
-from sklearn.preprocessing import StandardScaler, LabelEncoder
-from sklearn.linear_model import LogisticRegression
-from sklearn.svm import SVC
-from sklearn.ensemble import RandomForestClassifier
-from xgboost import XGBClassifier
-from sklearn.metrics import accuracy_score, classification_report, confusion_matrix
-import seaborn as sns
-import matplotlib.pyplot as plt
+from sklearn.preprocessing import LabelEncoder
 from scipy import stats
 
 # ✅ Set FFmpeg Path for Streamlit Cloud
@@ -41,7 +33,7 @@ def reset_session_state():
 
 # Sidebar for navigation
 st.sidebar.title("Navigation")
-current_app_mode = st.sidebar.selectbox("Choose the app mode", ["Train Classifiers", "Load Audio File", "Visualize Data"], key="app_mode_selection")
+current_app_mode = st.sidebar.selectbox("Choose the app mode", ["Load Audio File", "Visualize Data"], key="app_mode_selection")
 
 # Reset session state when app mode changes
 if st.session_state.last_app_mode != current_app_mode:
@@ -76,34 +68,30 @@ def extract_features(audio, sr):
         "kurt": round(spectral_rolloff / 1000, 2),
     }
 
-# ✅ Fixed: Check if Models Exist Before Using
+# ✅ Fixed: Load Pretrained Models Instead of Training
 def load_classifiers():
     global classifiers, le
     classifiers = {}
-    missing_models = []
+
+    model_files = ['SVM_model.pkl', 'Random Forest_model.pkl', 'XGBoost_model.pkl', 'stacking_model.pkl']
+    missing_files = [f for f in model_files if not os.path.exists(f)]
+
+    if missing_files:
+        st.error(f"Missing model files: {', '.join(missing_files)}. Please check GitHub deployment.")
+        st.stop()
 
     for model_name in ['SVM', 'Random Forest', 'XGBoost']:
-        model_path = f'{model_name}_model.pkl'
-        if os.path.exists(model_path):
-            with open(model_path, 'rb') as f:
-                classifiers[model_name] = pickle.load(f)
-        else:
-            missing_models.append(model_path)
-    
-    if os.path.exists('stacking_model.pkl'):
-        with open('stacking_model.pkl', 'rb') as f:
-            classifiers['Stacking'] = pickle.load(f)
-    else:
-        missing_models.append('stacking_model.pkl')
+        with open(f'{model_name}_model.pkl', 'rb') as f:
+            classifiers[model_name] = pickle.load(f)
+
+    with open('stacking_model.pkl', 'rb') as f:
+        classifiers['Stacking'] = pickle.load(f)
 
     if os.path.exists('label_encoder.pkl'):
         with open('label_encoder.pkl', 'rb') as f:
             le = pickle.load(f)
     else:
-        missing_models.append('label_encoder.pkl')
-
-    if missing_models:
-        st.error(f"Missing models: {', '.join(missing_models)}. Please train the classifiers first.")
+        st.error("Label encoder is missing. Please upload `label_encoder.pkl` to GitHub.")
         st.stop()
 
 # ✅ Fixed: Ensure Audio Loading Works
@@ -118,31 +106,7 @@ def load_and_scale_audio(file):
         return None, None
 
 # Main panel based on sidebar selection
-if current_app_mode == "Train Classifiers":
-    st.title("Train Classifiers")
-    df = pd.read_csv('gendervoice.csv')
-    df = df.drop_duplicates()
-    le = LabelEncoder()
-    df['Label'] = le.fit_transform(df['Label'])
-    
-    X = df.drop(columns=['Label'])
-    y = df['Label']
-    classifiers = {
-        'SVM': SVC(probability=True),
-        'Random Forest': RandomForestClassifier(),
-        'XGBoost': XGBClassifier()
-    }
-
-    for name, clf in classifiers.items():
-        clf.fit(X, y)
-        with open(f'{name}_model.pkl', 'wb') as f:
-            pickle.dump(clf, f)
-        st.success(f'{name} trained successfully')
-
-    with open('label_encoder.pkl', 'wb') as f:
-        pickle.dump(le, f)
-
-elif current_app_mode == "Load Audio File":
+if current_app_mode == "Load Audio File":
     st.title("Load Audio File")
     uploaded_file = st.file_uploader("Choose an audio file", type=["wav", "mp3", "flac", "ogg"], key="upload_audio")
     load_classifiers()
@@ -156,7 +120,7 @@ elif current_app_mode == "Load Audio File":
 
             stacking_model = classifiers.get('Stacking')
             if stacking_model is None:
-                st.error("Stacking model is not loaded. Please train classifiers first.")
+                st.error("Stacking model is not loaded. Please upload `stacking_model.pkl` to GitHub.")
                 st.stop()
 
             base_models = [classifiers.get(name) for name in ['SVM', 'Random Forest', 'XGBoost']]

@@ -5,6 +5,7 @@ import librosa
 import os
 import pickle
 from pydub import AudioSegment
+from pydub.utils import which
 from sklearn.model_selection import train_test_split
 from sklearn.preprocessing import StandardScaler, LabelEncoder
 from sklearn.linear_model import LogisticRegression
@@ -15,6 +16,10 @@ from sklearn.metrics import accuracy_score, classification_report, confusion_mat
 import seaborn as sns
 import matplotlib.pyplot as plt
 from scipy import stats
+
+# ✅ Set FFmpeg Path for Streamlit Cloud
+AudioSegment.converter = which("ffmpeg")
+AudioSegment.ffprobe = which("ffprobe")
 
 st.set_page_config(page_title="Voice Recognition System", page_icon=":microphone:", layout="wide")
 
@@ -38,7 +43,7 @@ def reset_session_state():
 st.sidebar.title("Navigation")
 current_app_mode = st.sidebar.selectbox("Choose the app mode", ["Train Classifiers", "Load Audio File", "Visualize Data"], key="app_mode_selection")
 
-# Check if the app mode has changed and reset session state if necessary
+# Reset session state when app mode changes
 if st.session_state.last_app_mode != current_app_mode:
     reset_session_state()
     st.session_state.last_app_mode = current_app_mode
@@ -85,7 +90,7 @@ def load_classifiers():
         with open('label_encoder.pkl', 'rb') as f:
             le = pickle.load(f)
 
-# 📌 **NO MICROPHONE RECORDING - USE FILE UPLOAD INSTEAD**
+# ✅ Fixed Audio Loading Using pydub
 def load_and_scale_audio(file):
     try:
         audio = AudioSegment.from_file(file)

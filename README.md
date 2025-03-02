@@ -23,7 +23,6 @@ You can run this app on your local machine using **Python & Streamlit**.
 
 ### **Clone the Repository**
 ```sh
-git clone https://github.com/yourusername/voicetogender.git
+https://github.com/Abdullah-02-134212-098/voice-to-gender-mini.git
 
-### **Run on Local Machine**
 streamlit run app.py

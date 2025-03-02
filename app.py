@@ -76,21 +76,37 @@ def extract_features(audio, sr):
         "kurt": round(spectral_rolloff / 1000, 2),
     }
 
+# ✅ Fixed: Check if Models Exist Before Using
 def load_classifiers():
     global classifiers, le
     classifiers = {}
+    missing_models = []
+
     for model_name in ['SVM', 'Random Forest', 'XGBoost']:
-        if os.path.exists(f'{model_name}_model.pkl'):
-            with open(f'{model_name}_model.pkl', 'rb') as f:
+        model_path = f'{model_name}_model.pkl'
+        if os.path.exists(model_path):
+            with open(model_path, 'rb') as f:
                 classifiers[model_name] = pickle.load(f)
+        else:
+            missing_models.append(model_path)
+    
     if os.path.exists('stacking_model.pkl'):
         with open('stacking_model.pkl', 'rb') as f:
             classifiers['Stacking'] = pickle.load(f)
+    else:
+        missing_models.append('stacking_model.pkl')
+
     if os.path.exists('label_encoder.pkl'):
         with open('label_encoder.pkl', 'rb') as f:
             le = pickle.load(f)
+    else:
+        missing_models.append('label_encoder.pkl')
 
-# ✅ Fixed Audio Loading Using pydub
+    if missing_models:
+        st.error(f"Missing models: {', '.join(missing_models)}. Please train the classifiers first.")
+        st.stop()
+
+# ✅ Fixed: Ensure Audio Loading Works
 def load_and_scale_audio(file):
     try:
         audio = AudioSegment.from_file(file)
@@ -105,11 +121,11 @@ def load_and_scale_audio(file):
 if current_app_mode == "Train Classifiers":
     st.title("Train Classifiers")
     df = pd.read_csv('gendervoice.csv')
-    df = df.drop_duplicates(subset=['meanfreq', 'sd', 'median', 'mode', 'Q25', 'Q75', 'IQR', 'skew', 'kurt', 'Label']) 
+    df = df.drop_duplicates()
     le = LabelEncoder()
     df['Label'] = le.fit_transform(df['Label'])
     
-    X = df[['meanfreq', 'sd', 'median', 'mode', 'Q25', 'Q75', 'IQR', 'skew', 'kurt']]
+    X = df.drop(columns=['Label'])
     y = df['Label']
     classifiers = {
         'SVM': SVC(probability=True),
@@ -130,17 +146,24 @@ elif current_app_mode == "Load Audio File":
     st.title("Load Audio File")
     uploaded_file = st.file_uploader("Choose an audio file", type=["wav", "mp3", "flac", "ogg"], key="upload_audio")
     load_classifiers()
+    
     if uploaded_file is not None:
         audio, sr = load_and_scale_audio(uploaded_file)
         if audio is not None:
             features = extract_features(audio, sr)
             st.info("Extracted Features:")
             st.write(features)
+
             stacking_model = classifiers.get('Stacking')
+            if stacking_model is None:
+                st.error("Stacking model is not loaded. Please train classifiers first.")
+                st.stop()
+
             base_models = [classifiers.get(name) for name in ['SVM', 'Random Forest', 'XGBoost']]
             base_predictions = np.zeros((1, len(base_models)))
             for i, model in enumerate(base_models):
                 base_predictions[:, i] = model.predict_proba([list(features.values())])[:, 1]
+
             prediction = stacking_model.predict(base_predictions)
             predicted_label = le.inverse_transform(prediction)[0]
             st.success(f'Predicted Label: {predicted_label}')
@@ -148,9 +171,8 @@ elif current_app_mode == "Load Audio File":
 elif current_app_mode == "Visualize Data":
     st.title("Visualize Data")
     df = pd.read_csv('gendervoice.csv')
-    df = df.drop_duplicates(subset=['meanfreq', 'sd', 'median', 'mode', 'Q25', 'Q75', 'IQR', 'skew', 'kurt', 'Label'])
+    df = df.drop_duplicates()
     le = LabelEncoder()
     df['Label'] = le.fit_transform(df['Label'])
     load_classifiers()
     st.write(df.head())
-

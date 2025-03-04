@@ -1,4 +1,4 @@
-# 🎤 Voice-to-Gender Classification System
+# 🎤 Voice-to-Gender-Mini Classification System
 
 [![Streamlit App](https://img.shields.io/badge/Streamlit-Online-green)](https://voicetogender.streamlit.app/)
 
